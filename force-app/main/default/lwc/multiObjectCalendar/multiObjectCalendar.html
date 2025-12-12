@@ -1,0 +1,176 @@
+<template>
+    <div class="slds-card slds-p-around_medium main-container">
+        <div class="slds-grid slds-grid_align-spread slds-m-bottom_medium header-row">
+            <div class="slds-col">
+                <lightning-button-group>
+                    <lightning-button icon-name="utility:chevronleft" onclick={previous}></lightning-button>
+                    <lightning-button label="Today" onclick={today}></lightning-button>
+                    <lightning-button icon-name="utility:chevronright" onclick={next}></lightning-button>
+                </lightning-button-group>
+                <span class="slds-text-heading_medium slds-m-left_medium slds-align-middle"><strong>{currentMonthYear}</strong></span>
+            </div>
+            <div class="slds-col">
+                <lightning-button-group class="slds-m-right_small">
+                    <lightning-button label="Month" value="month" onclick={setView} variant={monthBtnVariant}></lightning-button>
+                    <lightning-button label="Week" value="week" onclick={setView} variant={weekBtnVariant}></lightning-button>
+                    <lightning-button label="Day" value="day" onclick={setView} variant={dayBtnVariant}></lightning-button>
+                </lightning-button-group>
+                <lightning-button-icon icon-name="utility:settings" variant="border-filled" onclick={openSettings}></lightning-button-icon>
+            </div>
+        </div>
+
+        <template if:true={isMonthView}>
+            <div class="calendar-grid-month">
+                <div class="grid-header"><template for:each={daysOfWeek} for:item="day"><div key={day} class="header-cell">{day}</div></template></div>
+                <div class="grid-body">
+                    <template for:each={monthDays} for:item="day">
+                        <div key={day.id} class={day.class} onclick={handleGridClick} data-date={day.isoDate}>
+                            <div class="day-number">{day.label}</div>
+                            <template for:each={day.events} for:item="evt">
+                                <div key={evt.Id} class="event-chip" style={evt.style} onclick={handleEventClick} data-id={evt.Id} title={evt.Title}>
+                                    {evt.Title}
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+        <template if:true={isWeekView}><div class="calendar-grid-week"><div class="week-header-row"><div class="time-spacer"></div><template for:each={weekDays} for:item="day"><div key={day.id} class={day.columnClass}><div class="week-day-name">{day.name}</div><div class="week-day-num">{day.dateLabel}</div></div></template></div><div class="week-body-scroll"><template for:each={hours} for:item="hour"><div key={hour.id} class={hour.class}><div class="time-label">{hour.label}</div><template for:each={hour.weekSlots} for:item="slot"><div key={slot.id} class={slot.class} onclick={handleGridClick} data-date={slot.isoDate}><template for:each={slot.events} for:item="evt"><div key={evt.Id} class="event-chip-small" style={evt.style} onclick={handleEventClick} data-id={evt.Id}>{evt.Title}</div></template></div></template></div></template></div></div></template>
+        <template if:true={isDayView}><div class="calendar-grid-day"><div class="week-body-scroll"><template for:each={hours} for:item="hour"><div key={hour.id} class={hour.class}><div class="time-label">{hour.label}</div><div class="day-slot" onclick={handleGridClick} data-date={hour.dayIsoDate}><template for:each={hour.dayEvents} for:item="evt"><div key={evt.Id} class="event-chip-small" style={evt.style} onclick={handleEventClick} data-id={evt.Id}>{evt.Title}</div></template></div></div></template></div></div></template>
+
+        <template if:true={isSettingsOpen}>
+            <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open slds-modal_large">
+                <div class="slds-modal__container">
+                    <header class="slds-modal__header">
+                        <button class="slds-button slds-button_icon slds-modal__close slds-button_icon-inverse" title="Close" onclick={closeSettings}>
+                            <lightning-icon icon-name="utility:close" variant="inverse" size="small"></lightning-icon>
+                        </button>
+                        <h2 class="slds-text-heading_medium">Calendar Configuration</h2>
+                    </header>
+                    <div class="slds-modal__content slds-p-around_none" style="height: 600px;">
+                        <div class="slds-grid slds-wrap h-100" style="height:100%">
+                            <div class="slds-col slds-size_3-of-12 slds-border_right" style="background: #f3f2f2; height: 100%;">
+                                <div class="slds-vertical-tabs">
+                                    <ul class="slds-vertical-tabs__nav" role="tablist">
+                                        <li class={objectTabClass} onclick={switchSettingsTab} data-tab="object">
+                                            <a class="slds-vertical-tabs__link" href="#"><span class="slds-vertical-tabs__link-text">Data Sources</span></a>
+                                        </li>
+                                        <li class={themeTabClass} onclick={switchSettingsTab} data-tab="theme">
+                                            <a class="slds-vertical-tabs__link" href="#"><span class="slds-vertical-tabs__link-text">Theme</span></a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="slds-col slds-size_9-of-12 slds-p-around_medium" style="overflow-y:auto;">
+                                <template if:true={isObjectTab}>
+                                    <template if:false={isEditingSource}>
+                                        <div class="slds-grid slds-grid_align-spread slds-m-bottom_medium">
+                                            <h3 class="slds-text-heading_small">Active Calendars</h3>
+                                            <lightning-button label="Add Calendar" icon-name="utility:add" onclick={addNewSource}></lightning-button>
+                                        </div>
+                                        <template if:true={calendarSources.length}>
+                                            <table class="slds-table slds-table_cell-buffer slds-table_bordered">
+                                                <thead>
+                                                    <tr class="slds-line-height_reset">
+                                                        <th scope="col"><div class="slds-truncate" title="Object Name">Object Name</div></th>
+                                                        <th scope="col"><div class="slds-truncate" title="API Name">API Name</div></th>
+                                                        <th scope="col"><div class="slds-truncate" title="Start Date">Start Date</div></th>
+                                                        <th scope="col"><div class="slds-truncate" title="Color">Color</div></th>
+                                                        <th scope="col"><div class="slds-truncate" title="Actions"></div></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <template for:each={calendarSources} for:item="src">
+                                                        <tr key={src.id}>
+                                                            <td><div class="slds-truncate">{src.objectLabel}</div></td>
+                                                            <td><div class="slds-truncate">{src.objectName}</div></td>
+                                                            <td><div class="slds-truncate">{src.startField}</div></td>
+                                                            <td><div style={src.colorStyle}></div></td>
+                                                            <td>
+                                                                <lightning-button-icon icon-name="utility:edit" variant="bare" data-id={src.id} onclick={editSource} class="slds-m-right_small"></lightning-button-icon>
+                                                                <lightning-button-icon icon-name="utility:delete" variant="bare" data-id={src.id} onclick={deleteSource}></lightning-button-icon>
+                                                            </td>
+                                                        </tr>
+                                                    </template>
+                                                </tbody>
+                                            </table>
+                                        </template>
+                                    </template>
+
+                                    <template if:true={isEditingSource}>
+                                        <div class="slds-border_bottom slds-m-bottom_medium slds-p-bottom_small">
+                                            <lightning-button-icon icon-name="utility:back" onclick={cancelEdit} class="slds-m-right_small"></lightning-button-icon>
+                                            <strong>Configure Source</strong>
+                                        </div>
+                                        
+                                        <lightning-combobox label="Select Object" value={currentSource.objectName} options={objectOptions} onchange={handleObjectChange} required></lightning-combobox>
+                                        
+                                        <div class="slds-grid slds-gutters slds-m-top_medium">
+                                            <div class="slds-col slds-size_1-of-2">
+                                                <lightning-combobox label="Start Date" value={currentSource.startField} options={dateFieldOptions} onchange={handleFormChange} data-field="startField" required></lightning-combobox>
+                                            </div>
+                                            <div class="slds-col slds-size_1-of-2">
+                                                <lightning-combobox label="End Date" value={currentSource.endField} options={dateFieldOptions} onchange={handleFormChange} data-field="endField"></lightning-combobox>
+                                            </div>
+                                        </div>
+
+                                        <div class="slds-grid slds-gutters slds-m-top_medium">
+                                            <div class="slds-col"><lightning-combobox label="Title Type" value={currentSource.titleType} options={titleTypeOptions} onchange={handleTitleTypeChange} required></lightning-combobox></div>
+                                            <div class="slds-col">
+                                                <lightning-combobox label="Title Field" value={currentSource.titleField} options={filteredTitleOptions} onchange={handleFormChange} data-field="titleField" required></lightning-combobox>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="slds-m-top_medium"><lightning-input type="color" label="Event Color" value={currentSource.color} onchange={handleFormChange} data-field="color"></lightning-input></div>
+                                        
+                                        <div class="slds-m-top_large">
+                                            <lightning-accordion allow-multiple-sections-open>
+                                                <lightning-accordion-section name="Filters" label="Filters">
+                                                    <lightning-combobox label="Filter Records By User" value={currentSource.userField} options={userFieldOptions} onchange={handleFormChange} data-field="userField"></lightning-combobox>
+                                                    <div class="slds-m-top_medium">
+                                                        <div class="slds-grid slds-grid_align-spread">
+                                                            <label class="slds-form-element__label">Additional Filters (Max 5)</label>
+                                                            <lightning-button-icon icon-name="utility:add" onclick={addFilter} disabled={disableAddFilter}></lightning-button-icon>
+                                                        </div>
+                                                        <template for:each={currentSource.filters} for:item="filter" for:index="index">
+                                                            <div key={filter.id} class="slds-grid slds-gutters slds-m-top_x-small">
+                                                                <div class="slds-col slds-size_5-of-12">
+                                                                    <lightning-combobox options={allFieldsOptions} value={filter.field} onchange={handleFilterFieldChange} data-index={index}></lightning-combobox>
+                                                                </div>
+                                                                <div class="slds-col slds-size_6-of-12"><lightning-input type={filter.inputType} value={filter.value} onchange={handleFilterValueChange} data-index={index} variant="label-hidden" checked={filter.value}></lightning-input></div>
+                                                                <div class="slds-col slds-size_1-of-12"><lightning-button-icon icon-name="utility:delete" variant="bare" onclick={removeFilter} data-index={index}></lightning-button-icon></div>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </lightning-accordion-section>
+                                            </lightning-accordion>
+                                        </div>
+                                        <div class="slds-m-top_large slds-text-align_right">
+                                            <lightning-button label="Cancel" onclick={cancelEdit} class="slds-m-right_small"></lightning-button>
+                                            <lightning-button variant="brand" label="Save Source" onclick={saveCurrentSource}></lightning-button>
+                                        </div>
+                                    </template>
+                                </template>
+
+                                <template if:true={isThemeTab}>
+                                    <div class="slds-m-around_medium">
+                                        <h3 class="slds-text-heading_small slds-m-bottom_medium">Global Theme</h3>
+                                        <div class="slds-grid slds-gutters">
+                                            <div class="slds-col"><lightning-input type="color" label="Today Highlight" value={colorToday} onchange={handleThemeChange} data-id="colorToday"></lightning-input></div>
+                                            <div class="slds-col"><lightning-input type="color" label="Grid Hover" value={colorGridHighlight} onchange={handleThemeChange} data-id="colorGridHighlight"></lightning-input></div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                    <footer class="slds-modal__footer">
+                        <lightning-button label="Close" onclick={closeSettings}></lightning-button>
+                    </footer>
+                </div>
+            </section>
+            <div class="slds-backdrop slds-backdrop_open"></div>
+        </template>
+    </div>
+</template>
