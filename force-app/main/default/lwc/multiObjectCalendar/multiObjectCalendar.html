@@ -28,7 +28,8 @@
                             <div class="day-number">{day.label}</div>
                             <template for:each={day.events} for:item="evt">
                                 <div key={evt.Id} class="event-chip" style={evt.style} onclick={handleEventClick} data-id={evt.Id} title={evt.Title}>
-                                    {evt.Title}
+                                    <lightning-icon icon-name={evt.iconName} size="xx-small" class="chip-icon" variant="inverse"></lightning-icon>
+                                    <span class="chip-label">{evt.Title}</span>
                                 </div>
                             </template>
                         </div>
@@ -56,7 +57,8 @@
                                 <div key={slot.id} class={slot.class} onclick={handleGridClick} data-date={slot.isoDate}>
                                     <template for:each={slot.events} for:item="evt">
                                         <div key={evt.Id} class="event-chip-small" style={evt.style} onclick={handleEventClick} data-id={evt.Id} title={evt.Title}>
-                                            {evt.Title}
+                                            <lightning-icon icon-name={evt.iconName} size="xx-small" class="chip-icon" variant="inverse"></lightning-icon>
+                                            <span class="chip-label">{evt.Title}</span>
                                         </div>
                                     </template>
                                 </div>
@@ -76,7 +78,8 @@
                             <div class="day-slot" onclick={handleGridClick} data-date={hour.dayIsoDate}>
                                 <template for:each={hour.dayEvents} for:item="evt">
                                     <div key={evt.Id} class="event-chip-small" style={evt.style} onclick={handleEventClick} data-id={evt.Id} title={evt.Title}>
-                                        {evt.Title}
+                                        <lightning-icon icon-name={evt.iconName} size="xx-small" class="chip-icon" variant="inverse"></lightning-icon>
+                                        <span class="chip-label">{evt.Title}</span>
                                     </div>
                                 </template>
                             </div>
@@ -97,7 +100,8 @@
                     </header>
                     <div class="slds-modal__content slds-p-around_none" style="height: 600px;">
                         <div class="slds-grid slds-wrap h-100" style="height:100%">
-                            <div class="slds-col slds-size_3-of-12 slds-border_right" style="background: #f3f2f2; height: 100%;">
+                            
+                            <div class="slds-col slds-grow-none slds-border_right" style="background: #f3f2f2; height: 100%; flex-basis: 160px; max-width: 160px;">
                                 <div class="slds-vertical-tabs">
                                     <ul class="slds-vertical-tabs__nav" role="tablist">
                                         <li class={objectTabClass} onclick={switchSettingsTab} data-tab="object">
@@ -109,7 +113,8 @@
                                     </ul>
                                 </div>
                             </div>
-                            <div class="slds-col slds-size_9-of-12 slds-p-around_medium" style="overflow-y:auto;">
+
+                            <div class="slds-col slds-p-around_medium" style="overflow-y:auto;">
                                 <template if:true={isObjectTab}>
                                     <template if:false={isEditingSource}>
                                         <div class="slds-grid slds-grid_align-spread slds-m-bottom_medium">
@@ -175,7 +180,6 @@
                                                     <div class="slds-m-top_medium">
                                                         <lightning-input label="Filter Logic (e.g. 1 OR 2)" value={currentSource.filterLogic} onchange={handleFormChange} data-field="filterLogic" placeholder="Default is AND if empty"></lightning-input>
                                                     </div>
-                                                    
                                                     <div class="slds-m-top_medium filter-list-scope">
                                                         <div class="slds-grid slds-grid_align-spread">
                                                             <label class="slds-form-element__label">Additional Filters (Max 5)</label>
@@ -192,7 +196,6 @@
                                                             </div>
                                                         </template>
                                                     </div>
-                                                    
                                                 </lightning-accordion-section>
                                             </lightning-accordion>
                                         </div>
