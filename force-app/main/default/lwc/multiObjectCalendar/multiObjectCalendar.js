@@ -12,6 +12,14 @@ import getEvents from '@salesforce/apex/MultiCalendarController.getEvents';
 
 const ENABLE_LOGS = true;
 
+// Define Icons for Chips & Selector
+const OBJECT_ICONS = {
+    'Event': 'standard:event', 'Task': 'standard:task', 'Account': 'standard:account',
+    'Contact': 'standard:contact', 'Lead': 'standard:lead', 'Opportunity': 'standard:opportunity',
+    'Case': 'standard:case', 'Campaign': 'standard:campaign', 'Product2': 'standard:product',
+    'User': 'standard:user', 'Contract': 'standard:contract'
+};
+
 export default class MultiObjectCalendar extends NavigationMixin(LightningElement) {
     @track currentDate = new Date();
     @track currentView = 'month'; 
@@ -22,7 +30,6 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
     @track weekDays = [];
     @track hours = [];
 
-    // Config & Data
     @track calendarSources = [];
     @track currentSource = {}; 
     @track isEditingSource = false; 
@@ -35,7 +42,9 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
     @track titleTypeOptions = [];
     @track filteredTitleOptions = []; 
 
-    // Theme
+    // UI Helpers
+    @track selectedObjectIcon = 'standard:sobject';
+
     @track colorGridHighlight = localStorage.getItem('multi_cal_grid') || '#faffbd';
     @track colorToday = localStorage.getItem('multi_cal_today') || '#ebf7ff';
 
@@ -54,7 +63,6 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
     renderedCallback() { this.applyTheme(); }
     log(msg, data) { if (ENABLE_LOGS) console.log(`[MULTI-CAL] ${msg}`, data ? JSON.parse(JSON.stringify(data)) : ''); }
 
-    // --- GETTERS ---
     get currentMonthYear() { return `${this.monthNames[this.currentDate.getMonth()]} ${this.currentDate.getFullYear()}`; }
     get isMonthView() { return this.currentView === 'month'; }
     get isWeekView() { return this.currentView === 'week'; }
@@ -62,14 +70,12 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
     get monthBtnVariant() { return this.currentView === 'month' ? 'brand' : 'neutral'; }
     get weekBtnVariant() { return this.currentView === 'week' ? 'brand' : 'neutral'; }
     get dayBtnVariant() { return this.currentView === 'day' ? 'brand' : 'neutral'; }
-    
     get objectTabClass() { return `slds-vertical-tabs__nav-item ${this.currentSettingsTab === 'object' ? 'slds-is-active' : ''}`; }
     get themeTabClass() { return `slds-vertical-tabs__nav-item ${this.currentSettingsTab === 'theme' ? 'slds-is-active' : ''}`; }
     get isObjectTab() { return this.currentSettingsTab === 'object'; }
     get isThemeTab() { return this.currentSettingsTab === 'theme'; }
     get disableAddFilter() { return this.currentSource.filters && this.currentSource.filters.length >= 5; }
 
-    // --- DATA FETCHING ---
     @wire(getAllObjects)
     wiredObjects({ error, data }) {
         if (data) {
@@ -99,6 +105,8 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
             
             let type = this.currentSource.titleType || 'ID';
             this.filteredTitleOptions = rawTitles.filter(f => f.type === type);
+            
+            this.selectedObjectIcon = OBJECT_ICONS[objectName] || 'standard:sobject';
 
         } catch (error) { console.error(error); }
     }
@@ -107,11 +115,14 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
     addNewSource() {
         this.currentSource = {
             id: Date.now(),
+            isActive: true, // Default Active
             objectName: '', objectLabel: '', 
             startField: 'CreatedDate', endField: '',
             titleType: 'ID', titleField: 'Id',
-            userField: '', color: '#0176d3', filters: []
+            userField: '', color: '#0176d3', 
+            filters: [], filterLogic: '' // Logic support
         };
+        this.selectedObjectIcon = 'standard:sobject';
         this.isEditingSource = true;
     }
 
@@ -125,6 +136,22 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         }
     }
 
+    // TOGGLE ACTIVE STATE directly from list
+    toggleActive(event) {
+        const sourceId = event.target.dataset.id;
+        const checked = event.target.checked;
+        
+        let newSources = JSON.parse(JSON.stringify(this.calendarSources));
+        const idx = newSources.findIndex(s => s.id == sourceId);
+        if (idx >= 0) {
+            newSources[idx].isActive = checked;
+            // Update UI property too
+            newSources[idx].colorStyle = `display:block; width:24px; height:24px; border-radius:4px; background-color:${newSources[idx].color}; border:1px solid #c9c7c5; opacity: ${checked ? 1 : 0.4}`;
+        }
+        this.calendarSources = newSources;
+        this.saveAllSettings();
+    }
+
     deleteSource(event) {
         const sourceId = event.currentTarget.dataset.id;
         let raw = JSON.parse(JSON.stringify(this.calendarSources));
@@ -133,11 +160,8 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         this.saveAllSettings();
     }
 
-    // --- FIX: Robust Cancel Function ---
     cancelEdit(event) {
-        if (event && typeof event.preventDefault === 'function') {
-            event.preventDefault();
-        }
+        if (event && event.preventDefault) event.preventDefault();
         this.isEditingSource = false;
         this.currentSource = {};
     }
@@ -161,23 +185,25 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
     processSourcesForDisplay(sources) {
         return sources.map(s => {
             let displayLabel = s.objectName; 
-            if (this.objectOptions && this.objectOptions.length > 0) {
+            if (this.objectOptions.length) {
                 const found = this.objectOptions.find(opt => opt.value === s.objectName);
                 if (found) displayLabel = found.label;
-            } else if (s.objectLabel) {
-                displayLabel = s.objectLabel;
-            }
+            } else if (s.objectLabel) displayLabel = s.objectLabel;
+
+            // Ensure isActive defaults to true if missing (migration)
+            let active = s.hasOwnProperty('isActive') ? s.isActive : true;
 
             return {
                 ...s,
+                isActive: active,
                 objectLabel: displayLabel,
-                colorStyle: `display:block; width:24px; height:24px; border-radius:4px; background-color:${s.color}; border:1px solid #c9c7c5;`
+                colorStyle: `display:block; width:24px; height:24px; border-radius:4px; background-color:${s.color}; border:1px solid #c9c7c5; opacity: ${active ? 1 : 0.4}`
             };
         });
     }
 
     refreshSourceLabels() {
-        if (this.calendarSources && this.calendarSources.length > 0) {
+        if (this.calendarSources.length) {
             this.calendarSources = this.processSourcesForDisplay(this.calendarSources);
         }
     }
@@ -202,7 +228,6 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         this.showToast('Success', 'Configuration Saved', 'success');
     }
 
-    // --- FORM HANDLERS ---
     handleObjectChange(e) {
         let selectedApi = e.detail.value;
         let selectedOption = this.objectOptions.find(opt => opt.value === selectedApi);
@@ -249,17 +274,14 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         const index = parseInt(event.target.dataset.index, 10);
         const fieldName = event.detail.value;
         const fieldMeta = this.allFieldsOptions.find(f => f.value === fieldName);
-        
         let src = JSON.parse(JSON.stringify(this.currentSource));
         let filter = src.filters[index];
         filter.field = fieldName;
         filter.type = fieldMeta ? fieldMeta.type : 'STRING';
-        
         if (filter.type === 'DATE' || filter.type === 'DATETIME') filter.inputType = 'date';
         else if (filter.type === 'BOOLEAN') filter.inputType = 'checkbox';
         else if (filter.type === 'DOUBLE' || filter.type === 'INTEGER' || filter.type === 'CURRENCY') filter.inputType = 'number';
         else filter.inputType = 'text';
-
         filter.value = ''; 
         this.currentSource = src;
     }
@@ -276,15 +298,23 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
     async refreshCalendar() {
         if(!this.calendarSources.length) { this.rawEvents = []; this.renderView(); return; }
         
-        const fetchPromises = this.calendarSources.map(source => {
+        // Filter out inactive sources
+        const activeSources = this.calendarSources.filter(s => s.isActive !== false);
+
+        const fetchPromises = activeSources.map(source => {
             const cleanFilters = source.filters ? source.filters.filter(f => f.field && f.value !== '') : [];
+            
+            // Get Icon for this object type
+            const icon = OBJECT_ICONS[source.objectName] || 'standard:sobject';
+
             return getEvents({
                 objectName: source.objectName,
                 startField: source.startField || 'CreatedDate',
                 endField: source.endField,
                 userField: source.userField,
                 titleField: source.titleField,
-                filterJson: JSON.stringify(cleanFilters)
+                filterJson: JSON.stringify(cleanFilters),
+                filterLogic: source.filterLogic // Pass logic to Apex
             }).then(data => {
                 return data.map(record => {
                     let title = (source.titleField && record[source.titleField]) ? record[source.titleField] : (record.Name || record.Id);
@@ -297,7 +327,8 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
                     return { 
                         Id: record.Id, Title: title, Start: startDt, End: endDt,
                         Color: source.color, ObjectName: source.objectName,
-                        style: `background-color: ${source.color};` 
+                        style: `background-color: ${source.color};`,
+                        iconName: icon // Add icon to event object
                     };
                 }).filter(e => e !== null);
             }).catch(err => []);
@@ -419,13 +450,7 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
     }
 
     openSettings() { this.isSettingsOpen = true; }
-    
-    // Updated Close Settings to ensure edit mode is cancelled correctly
-    closeSettings() { 
-        this.isSettingsOpen = false; 
-        this.cancelEdit(); 
-    }
-    
+    closeSettings() { this.isSettingsOpen = false; this.cancelEdit(); }
     switchSettingsTab(e) { e.preventDefault(); this.currentSettingsTab = e.currentTarget.dataset.tab; }
     showToast(title, message, variant) { this.dispatchEvent(new ShowToastEvent({ title, message, variant })); }
     

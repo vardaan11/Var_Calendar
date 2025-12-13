@@ -151,3 +151,55 @@
     cursor: pointer;
     display: block; /* Removed flex since dots are gone */
 }
+
+.main-container { height: 100%; min-height: 600px; display: flex; flex-direction: column; overflow: hidden; --theme-today-bg: #ebf7ff; --theme-grid-hover: #faffbd; }
+.header-row { flex: 0 0 auto; margin-bottom: 1rem; }
+.calendar-grid-month, .calendar-grid-week, .calendar-grid-day { flex: 1 1 auto; display: flex; flex-direction: column; border: 1px solid #dddbda; overflow: hidden; min-height: 0; }
+.grid-header { flex: 0 0 auto; display: grid; grid-template-columns: repeat(7, 1fr); background: #f3f2f2; border-bottom: 1px solid #dddbda; }
+.header-cell { padding: 8px; text-align: center; font-weight: bold; color: #3e3e3c; }
+.grid-body { flex: 1 1 auto; display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr; overflow-y: auto; }
+.day { border-right: 1px solid #dddbda; border-bottom: 1px solid #dddbda; padding: 5px; position: relative; overflow: hidden; min-height: 80px; }
+.day:hover { background-color: #f8f8f8; cursor: pointer; }
+.day-number { font-weight: bold; font-size: 0.8rem; text-align: right; margin-bottom: 4px; }
+.prev-month { background-color: #f3f2f2; pointer-events: none; }
+.week-header-row { flex: 0 0 auto; display: flex; border-bottom: 1px solid #dddbda; background: #f3f2f2; min-height: 50px; }
+.time-spacer { width: 60px; border-right: 1px solid #dddbda; flex-shrink: 0; }
+.week-header-cell { flex-grow: 1; text-align: center; padding: 5px; border-right: 1px solid #dddbda; width: 0; }
+.week-body-scroll { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; }
+.time-row { display: flex; min-height: 50px; border-bottom: 1px solid #efefef; }
+.time-label { width: 60px; text-align: right; padding-right: 10px; color: #706e6b; font-size: 0.7rem; border-right: 1px solid #dddbda; padding-top: 10px; flex-shrink: 0; }
+.week-slot, .day-slot { flex-grow: 1; border-right: 1px solid #efefef; width: 0; position: relative; padding: 2px; }
+.day-slot { width: auto; }
+.today, .today-column, .current-hour-highlight { background-color: var(--theme-today-bg); }
+.week-slot:hover, .day-slot:hover { background-color: var(--theme-grid-hover) !important; cursor: pointer; }
+
+/* Dynamic Chip Styling */
+.event-chip, .event-chip-small {
+    color: white;
+    border-radius: 4px;
+    padding: 2px 4px;
+    font-size: 0.75rem;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.chip-icon, .chip-icon-small {
+    --sds-c-icon-color-foreground: white; /* Make icon white inside chip */
+}
+
+/* ... existing css ... */
+
+/* FIX FOR FILTER NUMBERING */
+.filter-list-scope {
+    counter-reset: filterIdx; /* Resets counter at the start of the list */
+}
+
+.filter-count::after {
+    counter-increment: filterIdx; /* Adds 1 for every row */
+    content: counter(filterIdx) "."; /* Displays "1.", "2.", etc. */
+}
