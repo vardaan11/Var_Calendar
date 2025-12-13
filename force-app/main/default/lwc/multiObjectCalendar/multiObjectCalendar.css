@@ -7,6 +7,7 @@
     overflow: hidden; 
     --theme-today-bg: #ebf7ff; 
     --theme-grid-hover: #faffbd; 
+    position: relative; /* Needed for absolute children context if used */
 }
 
 .header-row { 
@@ -172,7 +173,7 @@
 .filter-list-scope { counter-reset: filterIdx; }
 .filter-count::after { counter-increment: filterIdx; content: counter(filterIdx) "."; }
 
-/* --- POPOVER STYLING (FIXED) --- */
+/* --- EVENT POPOVER STYLING --- */
 .show-more-link {
     font-size: 0.75rem;
     color: #0176d3;
@@ -180,13 +181,15 @@
     margin-top: 2px;
     display: block;
     font-weight: bold;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
 }
 .show-more-link:hover { text-decoration: underline; }
 
 .popover-container {
-    /* CHANGED: Use fixed positioning to break out of the grid */
     position: fixed;
-    /* Ensure it sits on top of everything */
     z-index: 999999;
     background: white;
     border: 1px solid #c9c7c5;
@@ -224,4 +227,65 @@
     font-size: 0.8rem;
     padding: 4px 6px;
     margin-bottom: 4px;
+}
+
+/* --- NEW: CREATION SELECTION MODAL STYLING --- */
+.creation-modal-backdrop {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 999998; /* Just below the modal container */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.creation-modal-container {
+    background: white;
+    width: 400px;
+    border-radius: 4px;
+    box-shadow: 0 4px 10px 0 rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    max-height: 80vh;
+    z-index: 999999;
+}
+
+.creation-modal-header {
+    padding: 1rem;
+    border-bottom: 1px solid #dddbda;
+    background: #f3f2f2;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+
+.creation-modal-content {
+    padding: 1rem;
+    overflow-y: auto;
+}
+
+.creation-option-button {
+    width: 100%;
+    text-align: left;
+    padding: 0.75rem 1rem;
+    border: 1px solid #dddbda;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    background: white;
+    transition: background-color 0.1s;
+    display: flex;
+    align-items: center;
+}
+
+.creation-option-button:hover {
+    background-color: #f3f2f2;
+}
+
+.creation-modal-footer {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid #dddbda;
+    text-align: right;
+    background: #f3f2f2;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
 }

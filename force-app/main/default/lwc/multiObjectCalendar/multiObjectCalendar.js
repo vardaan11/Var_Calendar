@@ -11,6 +11,7 @@ import getUserReferenceFields from '@salesforce/apex/MultiCalendarController.get
 import getEvents from '@salesforce/apex/MultiCalendarController.getEvents';
 
 const ENABLE_LOGS = true;
+const SELECT_AT_CREATION_KEY = '__SELECT_AT_CREATION__';
 
 const OBJECT_ICONS = {
     'Event': 'standard:event', 'Task': 'standard:task', 'Account': 'standard:account',
@@ -18,6 +19,18 @@ const OBJECT_ICONS = {
     'Case': 'standard:case', 'Campaign': 'standard:campaign', 'Product2': 'standard:product',
     'User': 'standard:user', 'Contract': 'standard:contract'
 };
+
+// NEW: Hardcoded defaults for standard object creation
+const DEFAULT_RECORD_FIELDS = {
+    'Event': { start: 'StartDateTime', end: 'EndDateTime' },
+    'Task': { start: 'ActivityDate', end: null },
+    'Opportunity': { start: 'CloseDate', end: null },
+    'Campaign': { start: 'StartDate', end: 'EndDate' },
+    'Contract': { start: 'StartDate', end: 'EndDate' },
+    'Quote': { start: 'ExpirationDate', end: null },
+    'Order': { start: 'EffectiveDate', end: 'EndDate' }
+};
+
 
 export default class MultiObjectCalendar extends NavigationMixin(LightningElement) {
     @track currentDate = new Date();
@@ -48,6 +61,11 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
     @track colorToday = localStorage.getItem('multi_cal_today') || '#ebf7ff';
     @track maxRecordsPerDay = localStorage.getItem('multi_cal_max_records') ? parseInt(localStorage.getItem('multi_cal_max_records'), 10) : 4;
 
+    // Record Creation Settings
+    @track selectedCreationObject = localStorage.getItem('multi_cal_creation_obj') || SELECT_AT_CREATION_KEY;
+    @track showCreationModal = false;
+    @track clickedGridDate = null;
+
     @track rawEvents = [];
     
     // Shared Popover State
@@ -76,11 +94,32 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
     get monthBtnVariant() { return this.currentView === 'month' ? 'brand' : 'neutral'; }
     get weekBtnVariant() { return this.currentView === 'week' ? 'brand' : 'neutral'; }
     get dayBtnVariant() { return this.currentView === 'day' ? 'brand' : 'neutral'; }
+    
     get objectTabClass() { return `slds-vertical-tabs__nav-item ${this.currentSettingsTab === 'object' ? 'slds-is-active' : ''}`; }
     get themeTabClass() { return `slds-vertical-tabs__nav-item ${this.currentSettingsTab === 'theme' ? 'slds-is-active' : ''}`; }
+    get creationTabClass() { return `slds-vertical-tabs__nav-item ${this.currentSettingsTab === 'creation' ? 'slds-is-active' : ''}`; }
     get isObjectTab() { return this.currentSettingsTab === 'object'; }
     get isThemeTab() { return this.currentSettingsTab === 'theme'; }
+    get isCreationTab() { return this.currentSettingsTab === 'creation'; }
+
     get disableAddFilter() { return this.currentSource.filters && this.currentSource.filters.length >= 5; }
+
+    get creationRadioOptions() {
+        const options = [{ label: 'Decide on click (opens selection popup)', value: SELECT_AT_CREATION_KEY }];
+        this.calendarSources.filter(s => s.isActive !== false).forEach(s => {
+             options.push({ label: `Always create ${s.objectLabel}`, value: s.objectName });
+        });
+        return options;
+    }
+
+    get creationModalOptions() {
+        return this.calendarSources
+            .filter(s => s.isActive !== false)
+            .map(s => ({
+                ...s,
+                iconName: OBJECT_ICONS[s.objectName] || 'standard:sobject'
+            }));
+    }
 
     @wire(getAllObjects)
     wiredObjects({ error, data }) {
@@ -215,6 +254,14 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         let rawSources = [];
         if (stored) { try { rawSources = JSON.parse(stored); } catch(e) { rawSources = []; } }
         this.calendarSources = this.processSourcesForDisplay(rawSources);
+        
+        if (this.selectedCreationObject !== SELECT_AT_CREATION_KEY) {
+            const exists = this.calendarSources.some(s => s.objectName === this.selectedCreationObject && s.isActive !== false);
+            if (!exists) {
+                this.selectedCreationObject = SELECT_AT_CREATION_KEY;
+                localStorage.setItem('multi_cal_creation_obj', SELECT_AT_CREATION_KEY);
+            }
+        }
     }
 
     saveAllSettings() {
@@ -340,7 +387,7 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
     }
 
     renderView() {
-        this.isPopoverOpen = false; // Close popover on view change
+        this.isPopoverOpen = false; 
         if (this.currentView === 'month') this.generateMonthGrid();
         else if (this.currentView === 'week') this.generateWeekGrid();
         else if (this.currentView === 'day') this.generateDayGrid();
@@ -455,16 +502,70 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
              return;
         }
         
-        if(this.calendarSources.length === 0) return;
         let dateStr = event.currentTarget.dataset.date;
         if(!dateStr) return;
-        const defaultSource = this.calendarSources[0];
-        let defaults = {};
-        if(defaultSource.startField !== 'CreatedDate' && defaultSource.startField !== 'LastModifiedDate') {
-             defaults[defaultSource.startField] = dateStr;
-             if(defaultSource.endField) defaults[defaultSource.endField] = dateStr;
+
+        if (this.selectedCreationObject === SELECT_AT_CREATION_KEY) {
+            this.clickedGridDate = dateStr;
+            this.showCreationModal = true;
+        } else {
+            this.createRecord(this.selectedCreationObject, dateStr);
         }
-        this[NavigationMixin.Navigate]({ type: 'standard__objectPage', attributes: { objectApiName: defaultSource.objectName, actionName: 'new' }, state: { defaultFieldValues: encodeDefaultFieldValues(defaults) } });
+    }
+
+    // FIXED: Smart Record Creation Logic
+    createRecord(objectName, dateStr) {
+        let startField, endField;
+
+        // 1. Check if it's a known standard object
+        if (DEFAULT_RECORD_FIELDS[objectName]) {
+            startField = DEFAULT_RECORD_FIELDS[objectName].start;
+            endField = DEFAULT_RECORD_FIELDS[objectName].end;
+        } 
+        // 2. If not, try to find it in the calendar configuration
+        else {
+            const sourceConfig = this.calendarSources.find(s => s.objectName === objectName);
+            if (sourceConfig) {
+                startField = sourceConfig.startField;
+                endField = sourceConfig.endField;
+            }
+        }
+
+        let defaults = {};
+        // 3. Only prepopulate if we have a valid, non-audit start field
+        if (startField && startField !== 'CreatedDate' && startField !== 'LastModifiedDate') {
+            defaults[startField] = dateStr;
+            if (endField) {
+                defaults[endField] = dateStr;
+            }
+        }
+        
+        // 4. Launch creation, even if defaults is empty (Salesforce handles the rest)
+        this[NavigationMixin.Navigate]({ 
+            type: 'standard__objectPage', 
+            attributes: { objectApiName: objectName, actionName: 'new' }, 
+            state: { defaultFieldValues: encodeDefaultFieldValues(defaults) } 
+        });
+    }
+
+    handleCreationRadioChange(event) {
+        const selectedValue = event.detail.value;
+        this.selectedCreationObject = selectedValue;
+        localStorage.setItem('multi_cal_creation_obj', selectedValue);
+    }
+
+    handleCreationModalSelect(event) {
+        const objectName = event.currentTarget.dataset.value;
+        this.showCreationModal = false; 
+        if (this.clickedGridDate) {
+            this.createRecord(objectName, this.clickedGridDate);
+            this.clickedGridDate = null; 
+        }
+    }
+
+    closeCreationModal() {
+        this.showCreationModal = false;
+        this.clickedGridDate = null;
     }
 
     handleEventClick(event) {
@@ -474,7 +575,6 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         this[NavigationMixin.Navigate]({ type: 'standard__recordPage', attributes: { recordId: recId, objectApiName: evt ? evt.ObjectName : 'Event', actionName: 'view' } });
     }
 
-    // Updated handleShowMoreClick to calculate position
     handleShowMoreClick(event) {
         event.stopPropagation();
         const dayId = event.currentTarget.dataset.dayid;
@@ -506,7 +606,6 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
                     top = rect.top - 10;
                 }
 
-                // Basic collision detection for right edge
                 const popoverWidth = 260;
                 if (left + popoverWidth > window.innerWidth) {
                     left = rect.left - popoverWidth - 5;
