@@ -100,7 +100,7 @@
 .week-body-scroll { 
     flex: 1 1 auto; 
     overflow-y: auto; 
-    overflow-x: hidden; 
+    overflow-x: hidden;
 }
 
 .time-row { 
@@ -140,7 +140,7 @@
     cursor: pointer; 
 }
 
-/* --- NEW CHIP STYLING (Flexbox + Truncation) --- */
+/* --- CHIP STYLING --- */
 .event-chip, .event-chip-small {
     color: white;
     border-radius: 4px;
@@ -148,36 +148,80 @@
     font-size: 0.75rem;
     margin-bottom: 2px;
     cursor: pointer;
-    
-    /* Flexbox for Icon + Text alignment */
     display: flex;
     align-items: center;
-    gap: 4px; /* Space between icon and text */
-    overflow: hidden; /* Ensures the flex container doesn't spill over */
+    gap: 4px; 
+    overflow: hidden; 
 }
 
-/* Control the Icon */
 .chip-icon {
-    flex: 0 0 auto; /* Stop icon from squishing */
-    --sds-c-icon-color-foreground: white; /* Force white icon */
-    transform: scale(0.85); /* Make it just a 'tiny bit' smaller/subtler */
+    flex: 0 0 auto; 
+    --sds-c-icon-color-foreground: white; 
+    transform: scale(0.85); 
 }
 
-/* Control the Text */
 .chip-label {
-    flex: 1 1 auto; /* Take up remaining space */
-    min-width: 0;   /* CRITICAL: Allows flex child to shrink past content size for truncation */
+    flex: 1 1 auto; 
+    min-width: 0;   
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-/* --- SETTINGS COUNTER FIX --- */
-.filter-list-scope {
-    counter-reset: filterIdx; 
+/* --- SETTINGS COUNTER --- */
+.filter-list-scope { counter-reset: filterIdx; }
+.filter-count::after { counter-increment: filterIdx; content: counter(filterIdx) "."; }
+
+/* --- POPOVER STYLING (FIXED) --- */
+.show-more-link {
+    font-size: 0.75rem;
+    color: #0176d3;
+    cursor: pointer;
+    margin-top: 2px;
+    display: block;
+    font-weight: bold;
+}
+.show-more-link:hover { text-decoration: underline; }
+
+.popover-container {
+    /* CHANGED: Use fixed positioning to break out of the grid */
+    position: fixed;
+    /* Ensure it sits on top of everything */
+    z-index: 999999;
+    background: white;
+    border: 1px solid #c9c7c5;
+    border-radius: 4px;
+    box-shadow: 0 4px 10px 0 rgba(0,0,0,0.2);
+    width: 260px;
+    max-height: 350px;
+    display: flex;
+    flex-direction: column;
 }
 
-.filter-count::after {
-    counter-increment: filterIdx; 
-    content: counter(filterIdx) "."; 
+.popover-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid #dddbda;
+    background: #f3f2f2;
+    font-weight: bold;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+
+.popover-body {
+    padding: 8px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    background-color: white;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+}
+
+.popover-body .event-chip, 
+.popover-body .event-chip-small {
+    font-size: 0.8rem;
+    padding: 4px 6px;
+    margin-bottom: 4px;
 }

@@ -32,6 +32,11 @@
                                     <span class="chip-label">{evt.Title}</span>
                                 </div>
                             </template>
+                            <template if:true={day.hasMore}>
+                                <button class="slds-button slds-button_reset show-more-link" onclick={handleShowMoreClick} data-dayid={day.id}>
+                                    + {day.moreCount} More
+                                </button>
+                            </template>
                         </div>
                     </template>
                 </div>
@@ -61,6 +66,11 @@
                                             <span class="chip-label">{evt.Title}</span>
                                         </div>
                                     </template>
+                                    <template if:true={slot.hasMore}>
+                                        <button class="slds-button slds-button_reset show-more-link" onclick={handleShowMoreClick} data-dayid={slot.id}>
+                                            + {slot.moreCount} More
+                                        </button>
+                                    </template>
                                 </div>
                             </template>
                         </div>
@@ -82,7 +92,29 @@
                                         <span class="chip-label">{evt.Title}</span>
                                     </div>
                                 </template>
+                                <template if:true={hour.hasMore}>
+                                    <button class="slds-button slds-button_reset show-more-link" onclick={handleShowMoreClick} data-dayid={hour.id}>
+                                        + {hour.moreCount} More
+                                    </button>
+                                </template>
                             </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <template if:true={isPopoverOpen}>
+            <div class="popover-container" style={popoverStyle} onmouseleave={handleClosePopoverClick}>
+                <div class="popover-header">
+                    <span class="slds-truncate" title={popoverLabel}>{popoverLabel}</span>
+                    <lightning-button-icon icon-name="utility:close" variant="bare" size="small" onclick={handleClosePopoverClick}></lightning-button-icon>
+                </div>
+                <div class="popover-body slds-scrollable_y">
+                    <template for:each={popoverEvents} for:item="evt">
+                        <div key={evt.Id} class="event-chip" style={evt.style} onclick={handleEventClick} data-id={evt.Id} title={evt.Title}>
+                            <lightning-icon icon-name={evt.iconName} size="xx-small" class="chip-icon" variant="inverse"></lightning-icon>
+                            <span class="chip-label">{evt.Title}</span>
                         </div>
                     </template>
                 </div>
@@ -100,7 +132,6 @@
                     </header>
                     <div class="slds-modal__content slds-p-around_none" style="height: 600px;">
                         <div class="slds-grid slds-wrap h-100" style="height:100%">
-                            
                             <div class="slds-col slds-grow-none slds-border_right" style="background: #f3f2f2; height: 100%; flex-basis: 160px; max-width: 160px;">
                                 <div class="slds-vertical-tabs">
                                     <ul class="slds-vertical-tabs__nav" role="tablist">
@@ -113,7 +144,6 @@
                                     </ul>
                                 </div>
                             </div>
-
                             <div class="slds-col slds-p-around_medium" style="overflow-y:auto;">
                                 <template if:true={isObjectTab}>
                                     <template if:false={isEditingSource}>
@@ -208,9 +238,14 @@
                                 <template if:true={isThemeTab}>
                                     <div class="slds-m-around_medium">
                                         <h3 class="slds-text-heading_small slds-m-bottom_medium">Global Theme</h3>
-                                        <div class="slds-grid slds-gutters">
+                                        <div class="slds-grid slds-gutters slds-m-bottom_medium">
                                             <div class="slds-col"><lightning-input type="color" label="Today Highlight" value={colorToday} onchange={handleThemeChange} data-id="colorToday"></lightning-input></div>
                                             <div class="slds-col"><lightning-input type="color" label="Grid Hover" value={colorGridHighlight} onchange={handleThemeChange} data-id="colorGridHighlight"></lightning-input></div>
+                                        </div>
+                                        <div class="slds-grid slds-gutters">
+                                             <div class="slds-col slds-size_1-of-2">
+                                                <lightning-input type="number" label="Max Records Per Day (Default 4)" value={maxRecordsPerDay} min="1" max="20" onchange={handleThemeChange} data-id="maxRecordsPerDay"></lightning-input>
+                                             </div>
                                         </div>
                                     </div>
                                 </template>

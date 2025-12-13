@@ -12,7 +12,6 @@ import getEvents from '@salesforce/apex/MultiCalendarController.getEvents';
 
 const ENABLE_LOGS = true;
 
-// Define Icons for Chips & Selector
 const OBJECT_ICONS = {
     'Event': 'standard:event', 'Task': 'standard:task', 'Account': 'standard:account',
     'Contact': 'standard:contact', 'Lead': 'standard:lead', 'Opportunity': 'standard:opportunity',
@@ -42,17 +41,24 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
     @track titleTypeOptions = [];
     @track filteredTitleOptions = []; 
 
-    // UI Helpers
     @track selectedObjectIcon = 'standard:sobject';
 
+    // Theme Settings
     @track colorGridHighlight = localStorage.getItem('multi_cal_grid') || '#faffbd';
     @track colorToday = localStorage.getItem('multi_cal_today') || '#ebf7ff';
+    @track maxRecordsPerDay = localStorage.getItem('multi_cal_max_records') ? parseInt(localStorage.getItem('multi_cal_max_records'), 10) : 4;
 
     @track rawEvents = [];
     
+    // Shared Popover State
+    @track isPopoverOpen = false;
+    @track popoverLabel = '';
+    @track popoverEvents = [];
+    @track popoverStyle = '';
+    
     monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    defaultColors = { grid: '#faffbd', today: '#ebf7ff' };
+    defaultColors = { grid: '#faffbd', today: '#ebf7ff', maxRecords: 4 };
 
     connectedCallback() {
         this.loadSettings();
@@ -111,16 +117,15 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         } catch (error) { console.error(error); }
     }
 
-    // --- SOURCE MANAGEMENT ---
     addNewSource() {
         this.currentSource = {
             id: Date.now(),
-            isActive: true, // Default Active
+            isActive: true,
             objectName: '', objectLabel: '', 
             startField: 'CreatedDate', endField: '',
             titleType: 'ID', titleField: 'Id',
             userField: '', color: '#0176d3', 
-            filters: [], filterLogic: '' // Logic support
+            filters: [], filterLogic: ''
         };
         this.selectedObjectIcon = 'standard:sobject';
         this.isEditingSource = true;
@@ -136,7 +141,6 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         }
     }
 
-    // TOGGLE ACTIVE STATE directly from list
     toggleActive(event) {
         const sourceId = event.target.dataset.id;
         const checked = event.target.checked;
@@ -145,7 +149,6 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         const idx = newSources.findIndex(s => s.id == sourceId);
         if (idx >= 0) {
             newSources[idx].isActive = checked;
-            // Update UI property too
             newSources[idx].colorStyle = `display:block; width:24px; height:24px; border-radius:4px; background-color:${newSources[idx].color}; border:1px solid #c9c7c5; opacity: ${checked ? 1 : 0.4}`;
         }
         this.calendarSources = newSources;
@@ -190,7 +193,6 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
                 if (found) displayLabel = found.label;
             } else if (s.objectLabel) displayLabel = s.objectLabel;
 
-            // Ensure isActive defaults to true if missing (migration)
             let active = s.hasOwnProperty('isActive') ? s.isActive : true;
 
             return {
@@ -223,6 +225,7 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         localStorage.setItem('multi_cal_sources', JSON.stringify(rawData));
         localStorage.setItem('multi_cal_grid', this.colorGridHighlight);
         localStorage.setItem('multi_cal_today', this.colorToday);
+        localStorage.setItem('multi_cal_max_records', this.maxRecordsPerDay);
         this.refreshCalendar();
         this.applyTheme();
         this.showToast('Success', 'Configuration Saved', 'success');
@@ -255,7 +258,6 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         });
     }
 
-    // --- FILTERS ---
     addFilter() {
         if (this.currentSource.filters.length >= 5) return;
         let src = JSON.parse(JSON.stringify(this.currentSource));
@@ -294,17 +296,13 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         this.currentSource = src;
     }
 
-    // --- MAIN FETCH ---
     async refreshCalendar() {
         if(!this.calendarSources.length) { this.rawEvents = []; this.renderView(); return; }
         
-        // Filter out inactive sources
         const activeSources = this.calendarSources.filter(s => s.isActive !== false);
 
         const fetchPromises = activeSources.map(source => {
             const cleanFilters = source.filters ? source.filters.filter(f => f.field && f.value !== '') : [];
-            
-            // Get Icon for this object type
             const icon = OBJECT_ICONS[source.objectName] || 'standard:sobject';
 
             return getEvents({
@@ -314,7 +312,7 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
                 userField: source.userField,
                 titleField: source.titleField,
                 filterJson: JSON.stringify(cleanFilters),
-                filterLogic: source.filterLogic // Pass logic to Apex
+                filterLogic: source.filterLogic
             }).then(data => {
                 return data.map(record => {
                     let title = (source.titleField && record[source.titleField]) ? record[source.titleField] : (record.Name || record.Id);
@@ -328,7 +326,7 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
                         Id: record.Id, Title: title, Start: startDt, End: endDt,
                         Color: source.color, ObjectName: source.objectName,
                         style: `background-color: ${source.color};`,
-                        iconName: icon // Add icon to event object
+                        iconName: icon
                     };
                 }).filter(e => e !== null);
             }).catch(err => []);
@@ -341,8 +339,8 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         } catch (error) { console.error(error); }
     }
 
-    // --- GRID/NAV/UTILS ---
     renderView() {
+        this.isPopoverOpen = false; // Close popover on view change
         if (this.currentView === 'month') this.generateMonthGrid();
         else if (this.currentView === 'week') this.generateWeekGrid();
         else if (this.currentView === 'day') this.generateDayGrid();
@@ -358,9 +356,26 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         for (let i = 1; i <= daysInMonth; i++) {
             let currentDt = new Date(year, month, i);
             let isToday = (currentDt.toDateString() === new Date().toDateString());
-            let dayEvents = this.rawEvents.filter(e => this.isEventOnDate(e, currentDt));
+            let allDayEvents = this.rawEvents.filter(e => this.isEventOnDate(e, currentDt));
+            
             let isoDateStr = currentDt.getFullYear() + '-' + String(currentDt.getMonth() + 1).padStart(2, '0') + '-' + String(currentDt.getDate()).padStart(2, '0');
-            days.push({ id: `curr-${i}`, class: isToday ? 'day current-month today' : 'day current-month', label: i, isoDate: isoDateStr, events: dayEvents });
+            let dayId = `curr-${i}`;
+            
+            const shownEvents = allDayEvents.slice(0, this.maxRecordsPerDay);
+            const hiddenEvents = allDayEvents.slice(this.maxRecordsPerDay);
+            const hasMore = hiddenEvents.length > 0;
+
+            days.push({ 
+                id: dayId, 
+                class: isToday ? 'day current-month today' : 'day current-month', 
+                label: i, 
+                isoDate: isoDateStr, 
+                events: shownEvents,
+                hasMore: hasMore,
+                moreCount: hiddenEvents.length,
+                allEvents: allDayEvents,
+                popoverDateLabel: currentDt.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+            });
         }
         this.monthDays = days;
     }
@@ -393,11 +408,27 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
             let rowSlots = [];
             datesForSlots.forEach((dateObj, index) => {
                 let isTodayCol = dateObj.toDateString() === new Date().toDateString();
-                let slotEvents = this.rawEvents.filter(e => this.isEventInSlot(e, dateObj, h));
+                let allSlotEvents = this.rawEvents.filter(e => this.isEventInSlot(e, dateObj, h));
+                
+                const shownEvents = allSlotEvents.slice(0, this.maxRecordsPerDay);
+                const hiddenEvents = allSlotEvents.slice(this.maxRecordsPerDay);
+                const hasMore = hiddenEvents.length > 0;
+                let slotId = `slot-${h}-${index}`;
+
                 let createDt = new Date(dateObj);
                 createDt.setHours(h);
                 let isoStr = createDt.getFullYear() + '-' + String(createDt.getMonth() + 1).padStart(2, '0') + '-' + String(createDt.getDate()).padStart(2, '0') + 'T' + String(h).padStart(2, '0') + ':00:00.000Z';
-                rowSlots.push({ id: `slot-${h}-${index}`, class: isTodayCol ? 'week-slot today-column' : 'week-slot', isoDate: isoStr, events: slotEvents });
+                
+                rowSlots.push({ 
+                    id: slotId, 
+                    class: isTodayCol ? 'week-slot today-column' : 'week-slot', 
+                    isoDate: isoStr, 
+                    events: shownEvents,
+                    hasMore: hasMore,
+                    moreCount: hiddenEvents.length,
+                    allEvents: allSlotEvents,
+                    popoverDateLabel: createDt.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                });
             });
             rows.push({ id: `row-${h}`, label: hourLabel, class: isCurrentHourRow ? 'time-row current-hour-highlight' : 'time-row', weekSlots: rowSlots, dayEvents: rowSlots[0]?.events, dayIsoDate: rowSlots[0]?.isoDate });
         }
@@ -420,6 +451,10 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
     }
 
     handleGridClick(event) {
+        if(event.target.closest('.event-chip') || event.target.closest('.event-chip-small') || event.target.closest('.show-more-link') || event.target.closest('.popover-container')) {
+             return;
+        }
+        
         if(this.calendarSources.length === 0) return;
         let dateStr = event.currentTarget.dataset.date;
         if(!dateStr) return;
@@ -439,8 +474,64 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         this[NavigationMixin.Navigate]({ type: 'standard__recordPage', attributes: { recordId: recId, objectApiName: evt ? evt.ObjectName : 'Event', actionName: 'view' } });
     }
 
-    handleThemeChange(e) { this[e.target.dataset.id] = e.detail.value; }
+    // Updated handleShowMoreClick to calculate position
+    handleShowMoreClick(event) {
+        event.stopPropagation();
+        const dayId = event.currentTarget.dataset.dayid;
+        let targetData;
+
+        if (this.isMonthView) {
+            targetData = this.monthDays.find(d => d.id === dayId);
+        } else if (this.isWeekView) {
+            for (const hour of this.hours) {
+                targetData = hour.weekSlots.find(s => s.id === dayId);
+                if (targetData) break;
+            }
+        } else if (this.isDayView) {
+            targetData = this.hours.find(h => h.id === dayId);
+        }
+
+        if (targetData) {
+            this.popoverLabel = targetData.popoverDateLabel;
+            this.popoverEvents = targetData.allEvents;
+
+            const cellElement = event.currentTarget.closest('.day, .week-slot, .day-slot');
+            if (cellElement) {
+                const rect = cellElement.getBoundingClientRect();
+                let top = rect.top - 5;
+                let left = rect.left - 5;
+
+                if (this.isWeekView || this.isDayView) {
+                    left = rect.right + 5;
+                    top = rect.top - 10;
+                }
+
+                // Basic collision detection for right edge
+                const popoverWidth = 260;
+                if (left + popoverWidth > window.innerWidth) {
+                    left = rect.left - popoverWidth - 5;
+                }
+
+                this.popoverStyle = `top: ${top}px; left: ${left}px;`;
+                this.isPopoverOpen = true;
+            }
+        }
+    }
+
+    handleClosePopoverClick(event) {
+        event.stopPropagation();
+        this.isPopoverOpen = false;
+    }
+
+    handleThemeChange(e) { 
+        this[e.target.dataset.id] = e.detail.value;
+        if(e.target.dataset.id === 'maxRecordsPerDay') {
+            this.renderView();
+        }
+    }
+    
     resetTheme(e) { this[e.target.dataset.id] = this.defaultColors[e.target.dataset.key]; }
+    
     applyTheme() {
         const container = this.template.querySelector('.main-container');
         if(container) {
@@ -454,10 +545,11 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
     switchSettingsTab(e) { e.preventDefault(); this.currentSettingsTab = e.currentTarget.dataset.tab; }
     showToast(title, message, variant) { this.dispatchEvent(new ShowToastEvent({ title, message, variant })); }
     
-    previous() { this.changeDate(-1); }
-    next() { this.changeDate(1); }
-    today() { this.currentDate = new Date(); this.renderView(); }
-    setView(e) { this.currentView = e.target.value; this.renderView(); }
+    previous() { this.isPopoverOpen = false; this.changeDate(-1); }
+    next() { this.isPopoverOpen = false; this.changeDate(1); }
+    today() { this.isPopoverOpen = false; this.currentDate = new Date(); this.renderView(); }
+    setView(e) { this.isPopoverOpen = false; this.currentView = e.target.value; this.renderView(); }
+    
     changeDate(dir) {
         const dt = new Date(this.currentDate);
         if (this.currentView === 'month') dt.setMonth(dt.getMonth() + dir);
