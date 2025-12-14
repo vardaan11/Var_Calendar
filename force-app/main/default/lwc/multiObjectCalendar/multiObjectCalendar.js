@@ -20,7 +20,7 @@ const OBJECT_ICONS = {
     'User': 'standard:user', 'Contract': 'standard:contract'
 };
 
-// NEW: Hardcoded defaults for standard object creation
+// Hardcoded defaults for standard object creation fields
 const DEFAULT_RECORD_FIELDS = {
     'Event': { start: 'StartDateTime', end: 'EndDateTime' },
     'Task': { start: 'ActivityDate', end: null },
@@ -513,17 +513,17 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
         }
     }
 
-    // FIXED: Smart Record Creation Logic
-    createRecord(objectName, dateStr) {
+    // UPDATED: Async function to dynamically check field types before creation
+    async createRecord(objectName, dateStr) {
+        if (!objectName || !dateStr) return;
+
         let startField, endField;
 
-        // 1. Check if it's a known standard object
+        // 1. Determine field names (standard or config)
         if (DEFAULT_RECORD_FIELDS[objectName]) {
             startField = DEFAULT_RECORD_FIELDS[objectName].start;
             endField = DEFAULT_RECORD_FIELDS[objectName].end;
-        } 
-        // 2. If not, try to find it in the calendar configuration
-        else {
+        } else {
             const sourceConfig = this.calendarSources.find(s => s.objectName === objectName);
             if (sourceConfig) {
                 startField = sourceConfig.startField;
@@ -531,21 +531,58 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
             }
         }
 
-        let defaults = {};
-        // 3. Only prepopulate if we have a valid, non-audit start field
-        if (startField && startField !== 'CreatedDate' && startField !== 'LastModifiedDate') {
-            defaults[startField] = dateStr;
-            if (endField) {
-                defaults[endField] = dateStr;
-            }
+        if (!startField || startField === 'CreatedDate' || startField === 'LastModifiedDate') {
+            // If no valid start field, just open the form without defaults
+            this[NavigationMixin.Navigate]({
+                type: 'standard__objectPage', attributes: { objectApiName: objectName, actionName: 'new' }
+            });
+            return;
         }
-        
-        // 4. Launch creation, even if defaults is empty (Salesforce handles the rest)
-        this[NavigationMixin.Navigate]({ 
-            type: 'standard__objectPage', 
-            attributes: { objectApiName: objectName, actionName: 'new' }, 
-            state: { defaultFieldValues: encodeDefaultFieldValues(defaults) } 
-        });
+
+        try {
+            // 2. Fetch metadata dynamically to check field types
+            const fieldMetaList = await getAllFields({ objectName });
+            const startMeta = fieldMetaList.find(f => f.value === startField);
+            const endMeta = endField ? fieldMetaList.find(f => f.value === endField) : null;
+
+            let defaults = {};
+
+            // Helper to format date based on metadata type vs input string format
+            const formatDate = (meta, dStr) => {
+                if (!meta || !dStr) return null;
+                // If target is DATETIME and input has time component, use full string
+                if (meta.type === 'DATETIME' && dStr.includes('T')) {
+                    return dStr;
+                }else {
+                    // Case: DATETIME field & Month view click (no time) -> Append midnight UTC
+                    return `${dStr}T00:00:00.000Z`;
+                }
+                // Otherwise (DATE field or month view click), use just YYYY-MM-DD
+                return dStr.split('T')[0];
+            };
+
+            defaults[startField] = formatDate(startMeta, dateStr);
+            if (endField) {
+                defaults[endField] = formatDate(endMeta, dateStr);
+            }
+            
+            // Clean up nulls
+            Object.keys(defaults).forEach(key => defaults[key] === null && delete defaults[key]);
+
+            // 3. Navigate
+            this[NavigationMixin.Navigate]({ 
+                type: 'standard__objectPage', 
+                attributes: { objectApiName: objectName, actionName: 'new' }, 
+                state: { defaultFieldValues: encodeDefaultFieldValues(defaults) } 
+            });
+
+        } catch (error) {
+            console.error('Error fetching field metadata for creation:', error);
+            // Fallback: open form without defaults if metadata fetch fails
+            this[NavigationMixin.Navigate]({
+                type: 'standard__objectPage', attributes: { objectApiName: objectName, actionName: 'new' }
+            });
+        }
     }
 
     handleCreationRadioChange(event) {
