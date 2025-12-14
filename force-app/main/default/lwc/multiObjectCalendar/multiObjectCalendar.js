@@ -444,6 +444,7 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
 
     generateDayGrid() { this.generateHoursWithSlots([this.currentDate]); }
 
+    // FIXED: Correctly generate UTC ISO strings from local time slots
     generateHoursWithSlots(datesForSlots) {
         let rows = [];
         const currentHour = new Date().getHours();
@@ -462,9 +463,13 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
                 const hasMore = hiddenEvents.length > 0;
                 let slotId = `slot-${h}-${index}`;
 
+                // FIXED TIMEZONE LOGIC:
+                // 1. Create date object for the specific day
                 let createDt = new Date(dateObj);
-                createDt.setHours(h);
-                let isoStr = createDt.getFullYear() + '-' + String(createDt.getMonth() + 1).padStart(2, '0') + '-' + String(createDt.getDate()).padStart(2, '0') + 'T' + String(h).padStart(2, '0') + ':00:00.000Z';
+                // 2. Set the hour based on the row index (h), and zero out minutes/seconds for clean slot time
+                createDt.setHours(h, 0, 0, 0);
+                // 3. Use built-in toISOString() to convert this specific LOCAL time to the correct UTC string
+                let isoStr = createDt.toISOString();
                 
                 rowSlots.push({ 
                     id: slotId, 
@@ -550,14 +555,18 @@ export default class MultiObjectCalendar extends NavigationMixin(LightningElemen
             // Helper to format date based on metadata type vs input string format
             const formatDate = (meta, dStr) => {
                 if (!meta || !dStr) return null;
-                // If target is DATETIME and input has time component, use full string
-                if (meta.type === 'DATETIME' && dStr.includes('T')) {
-                    return dStr;
-                }else {
-                    // Case: DATETIME field & Month view click (no time) -> Append midnight UTC
-                    return `${dStr}T00:00:00.000Z`;
+
+                if (meta.type === 'DATETIME') {
+                    if (dStr.includes('T')) {
+                        // Case: DATETIME field & Week/Day view click (already has time) -> Use full string
+                        return dStr;
+                    } else {
+                        // Case: DATETIME field & Month view click (no time) -> Append midnight UTC
+                        return `${dStr}T00:00:00.000Z`;
+                    }
                 }
-                // Otherwise (DATE field or month view click), use just YYYY-MM-DD
+                
+                // Case: DATE field -> Always ensure we only send YYYY-MM-DD
                 return dStr.split('T')[0];
             };
 
